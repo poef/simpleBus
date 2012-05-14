@@ -1,45 +1,32 @@
 <?php
 	
 /*
-	$this
-	->listen('out', '/configuration/rss/', '/config/rss/,/shortsyntax/' )
-	->call( function( $message ) use ( $this ) {
-		$this
-		->listen( 'in', '/response/' )
-		->call( function( $message ) {
-			echo 'response heard';
-		})
-		->timeout( 5, function() {
-			echo 'timeout';
-		})
-		->say( 'in', $message );
-	})
-	->timeout( '5 seconds', function($message) {
-		echo "I didn't hear you";
-	});
+	class example extends simpleBus {
 	
-	'/foo/'      
-	-> matches a message with root entry 'foo'
-	'/foo/,/bar/'
-	-> matches a message with both /foo/ and /bar/
-	'/foo:bar/'  
-	-> matches a message with root entry 'foo' with string value 'bar'
-	'/foo/bar/'  
-	-> matches a message with root entry 'foo' with a child entry 'bar'
-	'/foo/.../bar/'
-	-> matches a message with root entry 'foo' with a descendant entry
-	   'bar'
-	'/foo:"bar"/'
-	-> matches a message with root entry 'foo' whose value contains the
-	   string 'bar'
-	'!/foo/'
-	-> matches a message that has no root entry 'foo'
-	'!/.../foo/'
-	-> matches a message that has no entry 'foo' at any level
-	'/foo:"[a-z][a-z0-9]*"/'
-	-> matches a message that has a root entry foo with a value that 
-	   matches the regular expression / [a-z][a-z0-9]* /i
-				
+		function init( $self ) {
+			$self
+			->listen('out', '/configuration/rss/', '/config/rss/,/shortsyntax/' )
+			->onmatch( function( $message ) use ( $self ) {
+				$self
+				->listen( 'in', '/response/' )
+				->onmatch( function( $message ) {
+					echo 'response heard';
+				})
+				->ontimeout( 5, function() {
+					echo 'timeout';
+				})
+				->say( 'in', $message );
+			})
+			->ontimeout( '5 seconds', function( $message ) {
+				echo "I didn't hear you";
+			})
+			->onclose( function( $timeoutHandler ) {
+				$timeoutHandler();
+			});
+		}
+		
+	}
+					
 */
 
 class simpleBus {
@@ -184,24 +171,44 @@ class simpleBusListener {
 		if ( $this->timeout && $this->timeout < microtime(true) ) {
 			$this->handleTimeout();
 		} else {
-			//$frop = $message;
-			//$frop['content'] = null;
-			//var_dump($frop);
-			//echo "<br>\n";
 			foreach ( $this->filters as $filter ) {
-				if ( $this->matchFilter( $message, $filter ) ) {
+				if ( simplePath::matchFilter( $message, $filter ) ) {
 					unset( $this->timeout );
 					unset( $this->timeoutHandler );
 					return true;
-				} else {
-				//	echo "no match<br>\n";
 				}
 			}
 			return false;
 		}
 	}
-	
-	protected function matchFilter( $message, $filter ) {
+}
+
+/*
+	'/foo/'      
+	-> matches a message with root entry 'foo'
+	'/foo/,/bar/'
+	-> matches a message with both /foo/ and /bar/
+	'/foo:bar/'  
+	-> matches a message with root entry 'foo' with string value 'bar'
+	'/foo/bar/'  
+	-> matches a message with root entry 'foo' with a child entry 'bar'
+	'/foo/.../bar/'
+	-> matches a message with root entry 'foo' with a descendant entry
+	   'bar'
+	'/foo:"bar"/'
+	-> matches a message with root entry 'foo' whose value contains the
+	   string 'bar'
+	'!/foo/'
+	-> matches a message that has no root entry 'foo'
+	'!/.../foo/'
+	-> matches a message that has no entry 'foo' at any level
+	'/foo:"[a-z][a-z0-9]*"/'
+	-> matches a message that has a root entry foo with a value that 
+	   matches the regular expression / [a-z][a-z0-9]* /i
+*/
+class simplePath {
+
+	static public function matchFilter( $message, $filter ) {
 		if ( !$filter ) {
 			return true;
 		}
@@ -212,7 +219,7 @@ class simpleBusListener {
 		while ( preg_match( $firstSearchPathRe, $filter, $matches ) ) {
 			$searchPath = $matches[1];
 			$filter = substr( $filter, strlen( $searchPath ) + 1 );
-			if ( !$this->matchSearchPath( 
+			if ( !self::matchSearchPath( 
 				$message, 
 				trim( $searchPath ) ) ) 
 			{
@@ -225,8 +232,7 @@ class simpleBusListener {
 		return true;
 	}
 	
-	protected function matchSearchPath( $message, $searchPath ) {
-		//echo "s: $searchPath<br>\n";
+	static public function matchSearchPath( $message, $searchPath ) {
 		if ( !$searchPath ) {
 			return true;
 		}
@@ -246,8 +252,7 @@ class simpleBusListener {
 			$value = preg_replace( '/\\\\(.)/', '\\1', $rawValue);
 			if ( $name == '...' ) {
 				$searchPath = substr( $searchPath, 4 );
-				return $this
-				->matchDeepSearchPath( $message, $searchPath, $negate );
+				return self::matchDeepSearchPath( $message, $searchPath, $negate );
 			} else {
 				if ( !is_array( $message ) || !$message[ $name ] ) {
 					return $negate;
@@ -262,7 +267,7 @@ class simpleBusListener {
 				} else {
 					$searchPath = substr( $searchPath, strlen( $matches[0] ) - 1 );
 					if ( $searchPath != '/' ) {
-						$result = $this->matchSearchPath( 
+						$result = self::matchSearchPath( 
 							$message[$name], $searchPath );
 					} else {
 						$result = true;
@@ -279,12 +284,12 @@ class simpleBusListener {
 	}
 	
 	protected function matchDeepSearchPath( $message, $searchPath, $negate = false ) {
-		$result = $this->matchSearchpath( $message, $searchPath );
+		$result = self::matchSearchpath( $message, $searchPath );
 		if ( $result ) {
 			return !$negate;
 		}
 		foreach ( $message as $key => $subMessage ) {
-			$result = $this->matchDeepSearchPath( 
+			$result = self::matchDeepSearchPath( 
 				$subMessage, $searchPath );
 			if ( $result ) {
 				return !$negate;

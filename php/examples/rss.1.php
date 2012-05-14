@@ -1,7 +1,6 @@
 <?php
 	require_once( '../simplebus.php' );
 	require_once( '../../Ariadne-Component-Library/ar.php' );
-
 	/**
 		this is an example mbus system - it implements a feed reader application 
 		that can read rss and atom feeds and outputs a nice html representation
